@@ -12,6 +12,8 @@
 % discoveries (rejected null hypotheses) that are false positives. For
 % example, with a FDR of 0.05 this means that 5% of all rejected null
 % hypotheses are tolerated to be false positives. (FDR / nFalseDiscoveries / nTotalDiscoveries)
+% Conversely, the False Null Rate (FNR) corresponds to the expeted
+% proportion of all accepted null hypotheses that are false negatives. 
 %
 % Written by DF 10/16
 
@@ -24,9 +26,11 @@ close all;
 rng('shuffle');
 
 % Simulation Settings
-Settings.sampleSizesToUse = [50]; % Sample size per test
-Settings.nTestsToUse = [11:20]; % Number of tests
-Settings.nIterations = 1000; % Number of iterations
+Settings.sampleSizesToUse = [30]; % Sample size per test
+Settings.nTestsToUse = [10 50 100]; % Number of tests
+Settings.trueEffectProportion = 0.2; % Proportion of hypotheses that are real effects (between 0 and 1)
+Settings.meanEffect = 1; % Mean magnitude of the effect (note: SD is on average 1)
+Settings.nIterations = 3; % Number of iterations
 Settings.alphaLevel = 0.05; % Nominal alpha level
 
 % Resampling method settings
@@ -37,15 +41,18 @@ Settings.ktmsIterations = 1000; % Number of iterations for ktms GFWER control pr
 Settings.ktms_u = 0; % u parameter for ktms GFWER control procedure
 
 % Preallocate FWER false positive count matrices
-FWER.FalsePositives.uncorrectedAllTests = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
-FWER.FalsePositives.bonferroniAllTests = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
-FWER.FalsePositives.holmAllTests = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
-FWER.FalsePositives.bhAllTests = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
-FWER.FalsePositives.bkyAllTests = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
-FWER.FalsePositives.byAllTests = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
-FWER.FalsePositives.blaireKarniskiAllTests = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
-FWER.FalsePositives.clusterAllTests = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
-FWER.FalsePositives.ktmsAllTests = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+FWER.FalsePositives.AllTests.uncorrected = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+FWER.FalsePositives.AllTests.bonferroni = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+FWER.FalsePositives.AllTests.holm = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+FWER.FalsePositives.AllTests.bh = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+FWER.FalsePositives.AllTests.bky = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+FWER.FalsePositives.AllTests.by = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+FWER.FalsePositives.AllTests.blaireKarniski = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+FWER.FalsePositives.AllTests.cluster = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+FWER.FalsePositives.AllTests.ktms = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+
+% Calculate number of true effects as proportion of all tests
+Settings.nTrueEffects = round(Settings.nTestsToUse * Settings.trueEffectProportion);
 
 % Generate random samples for multiple hypothesis tests and record FWER for
 % each method:
@@ -54,16 +61,24 @@ for nTests = 1:length(Settings.nTestsToUse)
         for i = 1:Settings.nIterations
             fprintf('Running for %i tests with sample size %i iteration %i \n', Settings.nTestsToUse(nTests), Settings.sampleSizesToUse(sampleSize), i);
             
-            % Generate a random samples from a normal distribution and perform
-            % paired-samples t tests
+            % Generate a random samples from a normal distribution (SD = 1)
             clear tempSample1; clear tempSample2; % Clear out temporary samples from previous iteration
             for j = 1:Settings.nTestsToUse(nTests)
                 tempSample1(:,j) = randn(Settings.sampleSizesToUse(sampleSize), 1);
                 tempSample2(:,j) = randn(Settings.sampleSizesToUse(sampleSize), 1);
             end
 
+            % Make vector of the ground truths (null or alternative hypothesis). 
+            % 0 = true null, 1 = true alternative
+            trueNullOrAlt = zeros(1, Settings.nTestsToUse(nTests));
+            
+            % Randomly allocate true effects
+            trueEffectLocations = randi(Settings.nTestsToUse(nTests), 1, Settings.nTrueEffects(nTests));
+            tempSample1(:, trueEffectLocations) = tempSample1(:, trueEffectLocations) + Settings.meanEffect;
+            trueNullOrAlt(1, trueEffectLocations) = 1;
+            
+            % Perform paired-samples t test
             [temp_h, temp_p] = ttest(tempSample1, tempSample2, 'Alpha', Settings.alphaLevel); 
-
             
             % Blaire-Karniski Maximum Statistic Permutation-Based
             % Correction
@@ -90,41 +105,50 @@ for nTests = 1:length(Settings.nTestsToUse)
             % Benjamini-Yekutieli FDR control procedure
             [fdr_by_corrected_h, benyek_critical_alpha(i, sampleSize, nTests)] = multcomp_fdr_by(temp_p, 'alpha', Settings.alphaLevel);
             
+            % Calculate the number of false positives using each method
+            FWER.FalsePositives.uncorrected(i, sampleSize, nTests) = sum(temp_h(trueNullOrAlt == 0));
+            FWER.FalsePositives.bonferroni(i, sampleSize, nTests) = sum(bonferroni_corrected_h(trueNullOrAlt == 0));
+            FWER.FalsePositives.holm(i, sampleSize, nTests) = sum(holm_corrected_h(trueNullOrAlt == 0));
+            FWER.FalsePositives.bh(i, sampleSize, nTests) = sum(fdr_bh_corrected_h(trueNullOrAlt == 0));
+            FWER.FalsePositives.bky(i, sampleSize, nTests) = sum(fdr_bky_corrected_h(trueNullOrAlt == 0));
+            FWER.FalsePositives.by(i, sampleSize, nTests) = sum(fdr_by_corrected_h(trueNullOrAlt == 0));
+            FWER.FalsePositives.blaireKarniski(i, sampleSize, nTests) = sum(blaireKarniski_corrected_h(trueNullOrAlt == 0));
+            FWER.FalsePositives.cluster(i, sampleSize, nTests) = sum(cluster_corrected_h(trueNullOrAlt == 0));
+            FWER.FalsePositives.ktms(i, sampleSize, nTests) = sum(ktms_h(trueNullOrAlt == 0));
 
-            % Calculate the proportion of false positives using each method
-            FWER.FalsePositives.uncorrected(i, sampleSize, nTests) = sum(temp_h) / Settings.nTestsToUse(nTests);
-            FWER.FalsePositives.bonferroni(i, sampleSize, nTests) = sum(bonferroni_corrected_h) / Settings.nTestsToUse(nTests);
-            FWER.FalsePositives.holm(i, sampleSize, nTests) = sum(holm_corrected_h) / Settings.nTestsToUse(nTests);
-            FWER.FalsePositives.bh(i, sampleSize, nTests) = sum(fdr_bh_corrected_h) / Settings.nTestsToUse(nTests);
-            FWER.FalsePositives.bky(i, sampleSize, nTests) = sum(fdr_bky_corrected_h) / Settings.nTestsToUse(nTests);
-            FWER.FalsePositives.by(i, sampleSize, nTests) = sum(fdr_by_corrected_h) / Settings.nTestsToUse(nTests);
-            FWER.FalsePositives.blaireKarniski(i, sampleSize, nTests) = sum(blaireKarniski_corrected_h) / Settings.nTestsToUse(nTests);
-            FWER.FalsePositives.cluster(i, sampleSize, nTests) = sum(cluster_corrected_h) / Settings.nTestsToUse(nTests);
-            FWER.FalsePositives.ktms(i, sampleSize, nTests) = sum(ktms_h) / Settings.nTestsToUse(nTests);
-
-
+            % Calculate the number of false negatives using each method
+            FWER.FalseNegatives.uncorrected(i, sampleSize, nTests) = sum(trueNullOrAlt(trueNullOrAlt == 1) - temp_h(trueNullOrAlt == 1));
+            FWER.FalseNegatives.bonferroni(i, sampleSize, nTests) = sum(trueNullOrAlt(trueNullOrAlt == 1) - bonferroni_corrected_h(trueNullOrAlt == 1));
+            FWER.FalseNegatives.holm(i, sampleSize, nTests) = sum(trueNullOrAlt(trueNullOrAlt == 1) - holm_corrected_h(trueNullOrAlt == 1));
+            FWER.FalseNegatives.bh(i, sampleSize, nTests) = sum(trueNullOrAlt(trueNullOrAlt == 1) - fdr_bh_corrected_h(trueNullOrAlt == 1));
+            FWER.FalseNegatives.bky(i, sampleSize, nTests) = sum(trueNullOrAlt(trueNullOrAlt == 1) - fdr_bky_corrected_h(trueNullOrAlt == 1));
+            FWER.FalseNegatives.by(i, sampleSize, nTests) = sum(trueNullOrAlt(trueNullOrAlt == 1) - fdr_by_corrected_h(trueNullOrAlt == 1));
+            FWER.FalseNegatives.blaireKarniski(i, sampleSize, nTests) = sum(trueNullOrAlt(trueNullOrAlt == 1) - blaireKarniski_corrected_h(trueNullOrAlt == 1));
+            FWER.FalseNegatives.cluster(i, sampleSize, nTests) = sum(trueNullOrAlt(trueNullOrAlt == 1) - cluster_corrected_h(trueNullOrAlt == 1));
+            FWER.FalseNegatives.ktms(i, sampleSize, nTests) = sum(trueNullOrAlt(trueNullOrAlt == 1) - ktms_h(trueNullOrAlt == 1));
+            
         end % of for i = 1:Settings.nIterations loop
 
-        FWER.FalsePositives.uncorrectedAllTests(FWER.FalsePositives.uncorrected > 0) = 1;
-        FWER.FalsePositives.bonferroniAllTests(FWER.FalsePositives.bonferroni > 0) = 1;
-        FWER.FalsePositives.holmAllTests(FWER.FalsePositives.holm > 0) = 1;
-        FWER.FalsePositives.bhAllTests(FWER.FalsePositives.bh > 0) = 1;
-        FWER.FalsePositives.bkyAllTests(FWER.FalsePositives.bky > 0) = 1;
-        FWER.FalsePositives.byAllTests(FWER.FalsePositives.by > 0) = 1;
-        FWER.FalsePositives.blaireKarniskiAllTests(FWER.FalsePositives.blaireKarniski > 0) = 1;
-        FWER.FalsePositives.clusterAllTests(FWER.FalsePositives.cluster > 0) = 1;
-        FWER.FalsePositives.ktmsAllTests(FWER.FalsePositives.ktms > 0) = 1; % No. of false positives needs to be above ktms_u parameter for GFWER
+        FWER.FalsePositives.AllTests.uncorrected(FWER.FalsePositives.uncorrected > 0) = 1;
+        FWER.FalsePositives.AllTests.bonferroni(FWER.FalsePositives.bonferroni > 0) = 1;
+        FWER.FalsePositives.AllTests.holm(FWER.FalsePositives.holm > 0) = 1;
+        FWER.FalsePositives.AllTests.bh(FWER.FalsePositives.bh > 0) = 1;
+        FWER.FalsePositives.AllTests.bky(FWER.FalsePositives.bky > 0) = 1;
+        FWER.FalsePositives.AllTests.by(FWER.FalsePositives.by > 0) = 1;
+        FWER.FalsePositives.AllTests.blaireKarniski(FWER.FalsePositives.blaireKarniski > 0) = 1;
+        FWER.FalsePositives.AllTests.cluster(FWER.FalsePositives.cluster > 0) = 1;
+        FWER.FalsePositives.AllTests.ktms(FWER.FalsePositives.ktms > 0) = 1; % No. of false positives needs to be above ktms_u parameter for GFWER
 
-        % Calculate the FWER
-        FWER.uncorrected(sampleSize, nTests) = sum(FWER.FalsePositives.uncorrectedAllTests(:, sampleSize, nTests)) / Settings.nIterations;
-        FWER.bonferroni(sampleSize, nTests) = sum(FWER.FalsePositives.bonferroniAllTests(:, sampleSize, nTests)) / Settings.nIterations;
-        FWER.holm(sampleSize, nTests) = sum(FWER.FalsePositives.holmAllTests(:, sampleSize, nTests)) / Settings.nIterations;
-        FWER.bh(sampleSize, nTests) = sum(FWER.FalsePositives.bhAllTests(:, sampleSize, nTests)) / Settings.nIterations;
-        FWER.bky(sampleSize, nTests) = sum(FWER.FalsePositives.bkyAllTests(:, sampleSize, nTests)) / Settings.nIterations;
-        FWER.by(sampleSize, nTests) = sum(FWER.FalsePositives.byAllTests(:, sampleSize, nTests)) / Settings.nIterations;
-        FWER.blaireKarniski(sampleSize, nTests) = sum(FWER.FalsePositives.blaireKarniskiAllTests(:, sampleSize, nTests)) / Settings.nIterations;
-        FWER.cluster(sampleSize, nTests) = sum(FWER.FalsePositives.clusterAllTests(:, sampleSize, nTests)) / Settings.nIterations;
-        FWER.GFWER_ktms(sampleSize, nTests) = sum(FWER.FalsePositives.ktmsAllTests(:, sampleSize, nTests)) / Settings.nIterations;
+        % Calculate the FWER (type 1 error rate)
+        FWER.uncorrected(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.uncorrected(:, sampleSize, nTests)) / Settings.nIterations;
+        FWER.bonferroni(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.bonferroni(:, sampleSize, nTests)) / Settings.nIterations;
+        FWER.holm(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.holm(:, sampleSize, nTests)) / Settings.nIterations;
+        FWER.bh(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.bh(:, sampleSize, nTests)) / Settings.nIterations;
+        FWER.bky(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.bky(:, sampleSize, nTests)) / Settings.nIterations;
+        FWER.by(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.by(:, sampleSize, nTests)) / Settings.nIterations;
+        FWER.blaireKarniski(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.blaireKarniski(:, sampleSize, nTests)) / Settings.nIterations;
+        FWER.cluster(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.cluster(:, sampleSize, nTests)) / Settings.nIterations;
+        FWER.GFWER_ktms(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.ktms(:, sampleSize, nTests)) / Settings.nIterations;
 
         % Estimate the expected (average) number of false positives within
         % a given family of tests
@@ -138,6 +162,19 @@ for nTests = 1:length(Settings.nTestsToUse)
         FalsePosRate.cluster(sampleSize, nTests) = nanmean(FWER.FalsePositives.cluster(:, sampleSize, nTests));
         FalsePosRate.ktms(sampleSize, nTests) = nanmean(FWER.FalsePositives.ktms(:, sampleSize, nTests));
 
+        % Estimate the expected (average) number of false negatives within
+        % a given family of tests
+        FalseNegRate.uncorrected(sampleSize, nTests) = nanmean(FWER.FalseNegatives.uncorrected(:, sampleSize, nTests));
+        FalseNegRate.bonferroni(sampleSize, nTests) = nanmean(FWER.FalseNegatives.bonferroni(:, sampleSize, nTests));
+        FalseNegRate.holm(sampleSize, nTests) = nanmean(FWER.FalseNegatives.holm(:, sampleSize, nTests));
+        FalseNegRate.bh(sampleSize, nTests) = nanmean(FWER.FalseNegatives.bh(:, sampleSize, nTests));
+        FalseNegRate.bky(sampleSize, nTests) = nanmean(FWER.FalseNegatives.bky(:, sampleSize, nTests));
+        FalseNegRate.by(sampleSize, nTests) = nanmean(FWER.FalseNegatives.by(:, sampleSize, nTests));
+        FalseNegRate.blaireKarniski(sampleSize, nTests) = nanmean(FWER.FalseNegatives.blaireKarniski(:, sampleSize, nTests));
+        FalseNegRate.cluster(sampleSize, nTests) = nanmean(FWER.FalseNegatives.cluster(:, sampleSize, nTests));
+        FalseNegRate.ktms(sampleSize, nTests) = nanmean(FWER.FalseNegatives.ktms(:, sampleSize, nTests));
+        
+        
     end % of for sampleSize
 
 end % of for nTests
@@ -160,8 +197,8 @@ plot(FWER.cluster);
 plot(FWER.GFWER_ktms);
 
 
-% Plot False Positive Rate of each method
-figure('Name', 'False positive rate for each method');
+% Plot average number of false positives for each method
+figure('Name', 'Average number of false positives for each method');
 plot(FalsePosRate.uncorrected);
 hold on;
 plot(FalsePosRate.bonferroni);
@@ -171,3 +208,15 @@ plot(FalsePosRate.bky);
 plot(FalsePosRate.by);
 plot(FalsePosRate.blaireKarniski);
 plot(FalsePosRate.cluster);
+
+% Plot average number of false negatives for each method
+figure('Name', 'Average number of false negatives for each method');
+plot(FalseNegRate.uncorrected);
+hold on;
+plot(FalseNegRate.bonferroni);
+plot(FalseNegRate.holm);
+plot(FalseNegRate.bh);
+plot(FalseNegRate.bky);
+plot(FalseNegRate.by);
+plot(FalseNegRate.blaireKarniski);
+plot(FalseNegRate.cluster);
