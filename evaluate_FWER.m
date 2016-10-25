@@ -27,10 +27,10 @@ rng('shuffle');
 
 % Simulation Settings
 Settings.sampleSizesToUse = [30]; % Sample size per test
-Settings.nTestsToUse = [10 50 100]; % Number of tests
-Settings.trueEffectProportion = 0.2; % Proportion of hypotheses that are real effects (between 0 and 1)
+Settings.nTestsToUse = [10 50 100 1000 10000]; % Number of tests
+Settings.trueEffectProportion = 0.1; % Proportion of hypotheses that are real effects (between 0 and 1)
 Settings.meanEffect = 1; % Mean magnitude of the effect (note: SD is on average 1)
-Settings.nIterations = 3; % Number of iterations
+Settings.nIterations = 1000; % Number of iterations
 Settings.alphaLevel = 0.05; % Nominal alpha level
 
 % Resampling method settings
@@ -55,6 +55,15 @@ FWER.FalsePositives.AllTests.ktms = zeros(Settings.nIterations, length(Settings.
 Settings.nTrueEffects = round(Settings.nTestsToUse * Settings.trueEffectProportion);
 Settings.nTrueNegatives = Settings.nTestsToUse - Settings.nTrueEffects;
 
+% Preallocate matrices of cutoff values for test statistics/p-values
+Cutoffs.bkp_critical_t = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+Cutoffs.bonferroni_corrected_alpha = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+Cutoffs.holm_corrected_alpha = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+Cutoffs.benhoch_critical_alpha = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+Cutoffs.bky_stage2_critical_alpha = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+Cutoffs.benyek_critical_alpha = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+
+
 % Generate random samples for multiple hypothesis tests and record FWER for
 % each method:
 for nTests = 1:length(Settings.nTestsToUse)    
@@ -63,7 +72,9 @@ for nTests = 1:length(Settings.nTestsToUse)
             fprintf('Running for %i tests with sample size %i iteration %i \n', Settings.nTestsToUse(nTests), Settings.sampleSizesToUse(sampleSize), i);
             
             % Generate a random samples from a normal distribution (SD = 1)
-            clear tempSample1; clear tempSample2; % Clear out temporary samples from previous iteration
+            tempSample1 = zeros(Settings.sampleSizesToUse(sampleSize), Settings.nTestsToUse(nTests)); % Preallocate
+            tempSample2 = zeros(Settings.sampleSizesToUse(sampleSize), Settings.nTestsToUse(nTests)); % Preallocate
+            
             for j = 1:Settings.nTestsToUse(nTests)
                 tempSample1(:,j) = randn(Settings.sampleSizesToUse(sampleSize), 1);
                 tempSample2(:,j) = randn(Settings.sampleSizesToUse(sampleSize), 1);
@@ -83,7 +94,7 @@ for nTests = 1:length(Settings.nTestsToUse)
             
             % Blaire-Karniski Maximum Statistic Permutation-Based
             % Correction
-            [blaireKarniski_corrected_h, bkp_corrected_p, bkp_critical_t(i, sampleSize, nTests)] = multcomp_blaire_karniski_permtest(tempSample1, tempSample2, 'alpha', Settings.alphaLevel, 'iterations', Settings.blaireKarniskiIterations);
+            [blaireKarniski_corrected_h, bkp_corrected_p, Cutoffs.bkp_critical_t(i, sampleSize, nTests)] = multcomp_blaire_karniski_permtest(tempSample1, tempSample2, 'alpha', Settings.alphaLevel, 'iterations', Settings.blaireKarniskiIterations);
             
             % Cluster-based correction
             [cluster_corrected_h] = multcomp_cluster_permtest(tempSample1, tempSample2, 'alpha', Settings.alphaLevel, 'iterations', Settings.clusterIterations, 'clusteringalpha', Settings.clusteringAlphaLevel);
@@ -92,19 +103,19 @@ for nTests = 1:length(Settings.nTestsToUse)
             [ktms_h] = multcomp_ktms(tempSample1, tempSample2, 'alpha', Settings.alphaLevel, 'iterations', Settings.ktmsIterations, 'ktms_u', Settings.ktms_u);
             
             % Bonferroni correction
-            [bonferroni_corrected_h, bonferroni_corrected_alpha(i, sampleSize, nTests)] = multcomp_bonferroni(temp_p, 'alpha', Settings.alphaLevel);
+            [bonferroni_corrected_h, Cutoffs.bonferroni_corrected_alpha(i, sampleSize, nTests)] = multcomp_bonferroni(temp_p, 'alpha', Settings.alphaLevel);
 
             % Holm-Bonferroni correction
-            [holm_corrected_h, holm_corrected_alpha(i, sampleSize, nTests)] = multcomp_holm_bonferroni(temp_p, 'alpha', Settings.alphaLevel);
+            [holm_corrected_h, Cutoffs.holm_corrected_alpha(i, sampleSize, nTests)] = multcomp_holm_bonferroni(temp_p, 'alpha', Settings.alphaLevel);
 
             % Benjamini-Hochberg FDR control procedure
-            [fdr_bh_corrected_h, benhoch_critical_alpha(i, sampleSize, nTests)] = multcomp_fdr_bh(temp_p, 'alpha', Settings.alphaLevel);
+            [fdr_bh_corrected_h, Cutoffs.benhoch_critical_alpha(i, sampleSize, nTests)] = multcomp_fdr_bh(temp_p, 'alpha', Settings.alphaLevel);
 
             % Benjamini-Krieger-Yekutieli FDR control procedure
-            [fdr_bky_corrected_h, bky_stage2_critical_alpha(i, sampleSize, nTests)] = multcomp_fdr_bky(temp_p, 'alpha', Settings.alphaLevel);
+            [fdr_bky_corrected_h, Cutoffs.bky_stage2_critical_alpha(i, sampleSize, nTests)] = multcomp_fdr_bky(temp_p, 'alpha', Settings.alphaLevel);
 
             % Benjamini-Yekutieli FDR control procedure
-            [fdr_by_corrected_h, benyek_critical_alpha(i, sampleSize, nTests)] = multcomp_fdr_by(temp_p, 'alpha', Settings.alphaLevel);
+            [fdr_by_corrected_h, Cutoffs.benyek_critical_alpha(i, sampleSize, nTests)] = multcomp_fdr_by(temp_p, 'alpha', Settings.alphaLevel);
             
             % Calculate the number of "hits" (true positives) using each method
             FWER.TruePositives.uncorrected(i, sampleSize, nTests) = sum(temp_h(trueNullOrAlt == 1));
@@ -164,9 +175,24 @@ for nTests = 1:length(Settings.nTestsToUse)
             FDP.cluster(i, sampleSize, nTests) = FWER.FalsePositives.cluster(i, sampleSize, nTests) / (FWER.FalsePositives.cluster(i, sampleSize, nTests) + FWER.TruePositives.cluster(i, sampleSize, nTests));
             FDP.ktms(i, sampleSize, nTests) = FWER.FalsePositives.ktms(i, sampleSize, nTests) / (FWER.FalsePositives.ktms(i, sampleSize, nTests) + FWER.TruePositives.ktms(i, sampleSize, nTests));
 
+            % Calculate the False Negative Proportion (FNP) for each
+            % method. This is the proportion of false negatives compared
+            % to the number of all accepted null hypotheses.
+            FNP.uncorrected(i, sampleSize, nTests) = FWER.FalseNegatives.uncorrected(i, sampleSize, nTests) / (FWER.FalseNegatives.uncorrected(i, sampleSize, nTests) + FWER.TrueNegatives.uncorrected(i, sampleSize, nTests));
+            FNP.bonferroni(i, sampleSize, nTests) = FWER.FalseNegatives.bonferroni(i, sampleSize, nTests) / (FWER.FalseNegatives.bonferroni(i, sampleSize, nTests) + FWER.TrueNegatives.bonferroni(i, sampleSize, nTests));
+            FNP.holm(i, sampleSize, nTests) = FWER.FalseNegatives.holm(i, sampleSize, nTests) / (FWER.FalseNegatives.holm(i, sampleSize, nTests) + FWER.TrueNegatives.holm(i, sampleSize, nTests));
+            FNP.bh(i, sampleSize, nTests) = FWER.FalseNegatives.bh(i, sampleSize, nTests) / (FWER.FalseNegatives.bh(i, sampleSize, nTests) + FWER.TrueNegatives.bh(i, sampleSize, nTests));
+            FNP.bky(i, sampleSize, nTests) = FWER.FalseNegatives.bky(i, sampleSize, nTests) / (FWER.FalseNegatives.bky(i, sampleSize, nTests) + FWER.TrueNegatives.bky(i, sampleSize, nTests));
+            FNP.by(i, sampleSize, nTests) = FWER.FalseNegatives.by(i, sampleSize, nTests) / (FWER.FalseNegatives.by(i, sampleSize, nTests) + FWER.TrueNegatives.by(i, sampleSize, nTests));
+            FNP.blaireKarniski(i, sampleSize, nTests) = FWER.FalseNegatives.blaireKarniski(i, sampleSize, nTests) / (FWER.FalseNegatives.blaireKarniski(i, sampleSize, nTests) + FWER.TrueNegatives.blaireKarniski(i, sampleSize, nTests));
+            FNP.cluster(i, sampleSize, nTests) = FWER.FalseNegatives.cluster(i, sampleSize, nTests) / (FWER.FalseNegatives.cluster(i, sampleSize, nTests) + FWER.TrueNegatives.cluster(i, sampleSize, nTests));
+            FNP.ktms(i, sampleSize, nTests) = FWER.FalseNegatives.ktms(i, sampleSize, nTests) / (FWER.FalseNegatives.ktms(i, sampleSize, nTests) + FWER.TrueNegatives.ktms(i, sampleSize, nTests));
+
+            
             
         end % of for i = 1:Settings.nIterations loop
 
+        % Calculate the number of false positives using each method
         FWER.FalsePositives.AllTests.uncorrected(FWER.FalsePositives.uncorrected > 0) = 1;
         FWER.FalsePositives.AllTests.bonferroni(FWER.FalsePositives.bonferroni > 0) = 1;
         FWER.FalsePositives.AllTests.holm(FWER.FalsePositives.holm > 0) = 1;
@@ -189,7 +215,7 @@ for nTests = 1:length(Settings.nTestsToUse)
         FWER.GFWER_ktms(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.ktms(:, sampleSize, nTests)) / Settings.nIterations;
 
         % Estimate the expected (average) number of false positives within
-        % a given family of tests
+        % a given family of tests as percentage of all nulls
         FalsePosRate.uncorrected(sampleSize, nTests) = nanmean(FWER.FalsePositives.uncorrected(:, sampleSize, nTests));
         FalsePosRate.bonferroni(sampleSize, nTests) = nanmean(FWER.FalsePositives.bonferroni(:, sampleSize, nTests));
         FalsePosRate.holm(sampleSize, nTests) = nanmean(FWER.FalsePositives.holm(:, sampleSize, nTests));
@@ -212,6 +238,54 @@ for nTests = 1:length(Settings.nTestsToUse)
         FalseNegRate.cluster(sampleSize, nTests) = nanmean(FWER.FalseNegatives.cluster(:, sampleSize, nTests));
         FalseNegRate.ktms(sampleSize, nTests) = nanmean(FWER.FalseNegatives.ktms(:, sampleSize, nTests));
         
+        % Estimate the expected (average) number of true positives within a
+        % given family of tests as a percentage of all true effects
+        TruePosRate.uncorrected(sampleSize, nTests) = nanmean(FWER.TruePositives.uncorrected(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
+        TruePosRate.bonferroni(sampleSize, nTests) = nanmean(FWER.TruePositives.bonferroni(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
+        TruePosRate.holm(sampleSize, nTests) = nanmean(FWER.TruePositives.holm(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
+        TruePosRate.bh(sampleSize, nTests) = nanmean(FWER.TruePositives.bh(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
+        TruePosRate.bky(sampleSize, nTests) = nanmean(FWER.TruePositives.bky(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
+        TruePosRate.by(sampleSize, nTests) = nanmean(FWER.TruePositives.by(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
+        TruePosRate.blaireKarniski(sampleSize, nTests) = nanmean(FWER.TruePositives.blaireKarniski(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
+        TruePosRate.cluster(sampleSize, nTests) = nanmean(FWER.TruePositives.cluster(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
+        TruePosRate.ktms(sampleSize, nTests) = nanmean(FWER.TruePositives.ktms(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
+
+        % Estimate the expected (average) number of true negatives (nulls) within a
+        % given family of tests
+        TrueNegRate.uncorrected(sampleSize, nTests) = nanmean(FWER.TrueNegatives.uncorrected(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
+        TrueNegRate.bonferroni(sampleSize, nTests) = nanmean(FWER.TrueNegatives.bonferroni(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
+        TrueNegRate.holm(sampleSize, nTests) = nanmean(FWER.TrueNegatives.holm(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
+        TrueNegRate.bh(sampleSize, nTests) = nanmean(FWER.TrueNegatives.bh(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
+        TrueNegRate.bky(sampleSize, nTests) = nanmean(FWER.TrueNegatives.bky(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
+        TrueNegRate.by(sampleSize, nTests) = nanmean(FWER.TrueNegatives.by(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
+        TrueNegRate.blaireKarniski(sampleSize, nTests) = nanmean(FWER.TrueNegatives.blaireKarniski(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
+        TrueNegRate.cluster(sampleSize, nTests) = nanmean(FWER.TrueNegatives.cluster(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
+        TrueNegRate.ktms(sampleSize, nTests) = nanmean(FWER.TrueNegatives.ktms(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
+        
+        
+        % Estimate the False Discovery Rate (average of False Discovery
+        % Proportion across iterations)
+        FDR.uncorrected(sampleSize, nTests) = nanmean(FDP.uncorrected(:, sampleSize, nTests));
+        FDR.bonferroni(sampleSize, nTests) = nanmean(FDP.bonferroni(:, sampleSize, nTests));
+        FDR.holm(sampleSize, nTests) = nanmean(FDP.holm(:, sampleSize, nTests));
+        FDR.bh(sampleSize, nTests) = nanmean(FDP.bh(:, sampleSize, nTests));
+        FDR.bky(sampleSize, nTests) = nanmean(FDP.bky(:, sampleSize, nTests));
+        FDR.by(sampleSize, nTests) = nanmean(FDP.by(:, sampleSize, nTests));
+        FDR.blaireKarniski(sampleSize, nTests) = nanmean(FDP.blaireKarniski(:, sampleSize, nTests));
+        FDR.cluster(sampleSize, nTests) = nanmean(FDP.cluster(:, sampleSize, nTests));
+        FDR.ktms(sampleSize, nTests) = nanmean(FDP.ktms(:, sampleSize, nTests));
+
+        % Estimate the False Null Rate (Average of False Negative
+        % Proportion across iterations)
+        FNR.uncorrected(sampleSize, nTests) = nanmean(FNP.uncorrected(:, sampleSize, nTests));
+        FNR.bonferroni(sampleSize, nTests) = nanmean(FNP.bonferroni(:, sampleSize, nTests));
+        FNR.holm(sampleSize, nTests) = nanmean(FNP.holm(:, sampleSize, nTests));
+        FNR.bh(sampleSize, nTests) = nanmean(FNP.bh(:, sampleSize, nTests));
+        FNR.bky(sampleSize, nTests) = nanmean(FNP.bky(:, sampleSize, nTests));
+        FNR.by(sampleSize, nTests) = nanmean(FNP.by(:, sampleSize, nTests));
+        FNR.blaireKarniski(sampleSize, nTests) = nanmean(FNP.blaireKarniski(:, sampleSize, nTests));
+        FNR.cluster(sampleSize, nTests) = nanmean(FNP.cluster(:, sampleSize, nTests));
+        FNR.ktms(sampleSize, nTests) = nanmean(FNP.ktms(:, sampleSize, nTests));
         
     end % of for sampleSize
 
@@ -234,6 +308,18 @@ plot(FWER.blaireKarniski);
 plot(FWER.cluster);
 plot(FWER.GFWER_ktms);
 
+% Plot FDR of each method
+figure('Name', 'FDR for each method');
+plot(FDR.uncorrected);
+hold on;
+plot(FDR.bonferroni);
+plot(FDR.holm);
+plot(FDR.bh);
+plot(FDR.bky);
+plot(FDR.by);
+plot(FDR.blaireKarniski);
+plot(FDR.cluster);
+plot(FDR.ktms);
 
 % Plot average number of false positives for each method
 figure('Name', 'Average number of false positives for each method');
@@ -258,3 +344,27 @@ plot(FalseNegRate.bky);
 plot(FalseNegRate.by);
 plot(FalseNegRate.blaireKarniski);
 plot(FalseNegRate.cluster);
+
+% Plot average percentage of true positives for each method
+figure('Name', 'Average percentage of true positives for each method');
+plot(TruePosRate.uncorrected);
+hold on;
+plot(TruePosRate.bonferroni);
+plot(TruePosRate.holm);
+plot(TruePosRate.bh);
+plot(TruePosRate.bky);
+plot(TruePosRate.by);
+plot(TruePosRate.blaireKarniski);
+plot(TruePosRate.cluster);
+
+% Plot average percentage of true negatives for each method
+figure('Name', 'Average percentage of true negatives for each method');
+plot(TrueNegRate.uncorrected);
+hold on;
+plot(TrueNegRate.bonferroni);
+plot(TrueNegRate.holm);
+plot(TrueNegRate.bh);
+plot(TrueNegRate.bky);
+plot(TrueNegRate.by);
+plot(TrueNegRate.blaireKarniski);
+plot(TrueNegRate.cluster);
