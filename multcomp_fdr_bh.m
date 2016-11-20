@@ -1,19 +1,7 @@
-function [fdr_corrected_h, benhoch_critical_alpha] = multcomp_fdr_bh(p_values, varargin)
-
-%__________________________________________________________________________
-% Multiple comparisons correction function written by Daniel Feuerriegel 21/04/2016 
-% to complement DDTBOX scripts written by Stefan Bode 01/03/2013.
+function [Results] = multcomp_fdr_bh(p_values, varargin)
 %
-% The toolbox was written with contributions from:
-% Daniel Bennett, Daniel Feuerriegel, Phillip Alday
-%
-% The author (Stefan Bode) further acknowledges helpful conceptual input/work from: 
-% Jutta Stahl, Simon Lilburn, Philip L. Smith, Elaine Corbett, Carsten Murawski, 
-% Carsten Bogler, John-Dylan Haynes
-%__________________________________________________________________________
-%
-% This script receives a vector of p-values and outputs
-% false discovery rate corrected null hypothesis test results (Benjamin-Hochberg procedure).
+% This function receives a vector of p-values and outputs
+% false discovery rate-corrected null hypothesis test results (Benjamin-Hochberg procedure).
 % The number of tests is determined by the length of the vector of p-values.
 %
 % Benjamini, Y., & Hochberg, Y. (1995). Controlling the false discovery rate: 
@@ -22,25 +10,54 @@ function [fdr_corrected_h, benhoch_critical_alpha] = multcomp_fdr_bh(p_values, v
 % Stable link:http://www.jstor.org/stable/2346101 
 %
 %
-% requires:
-% - p_values (vector of p-values from the hypothesis tests of interest)
+% Inputs:
 %
-% optional:
-% - alpha (uncorrected alpha level for statistical significance, default 0.05)
+%   p_values       vector of p-values from the hypothesis tests of interest
+%
+%  'Key1'          Keyword string for argument 1
+%
+%   Value1         Value of argument 1
+%
+% Optional Keyword Inputs:
+%
+%   alpha               uncorrected alpha level for statistical significance, default 0.05
+%
+% Outputs:
+%
+%   Results structure containing:
+%
+%   corrected_h     vector of false discovery rate corrected hypothesis tests 
+%                   derived from comparing p-values to false discovery rate 
+%                   adjusted critical alpha level. 
+%                   1 = statistically significant, 0 = not statistically significant
+%
+%   critical_alpha      the adjusted critical alpha for the false
+%                       discovery rate procedure. p-values smaller
+%                       or equal to this value are declared
+%                       statistically significant. This value is 0 
+%                       if no tests were statistically significant.
 %
 %
-% outputs:
-% - fdr_corrected_h (vector of false discovery rate corrected hypothesis tests 
-% derived from comparing p-values to false discovery rate adjusted critical alpha level. 
-% 1 = statistically significant, 0 = not statistically significant)
+% Example:      [Results] = multcomp_fdr_bh(p_values, 'alpha', 0.05)
 %
-% - benhoch_critical_alpha (the adjusted critical alpha for the false
-% discovery rate procedure. p-values smaller or equal to this value are
-% declared statistically significant. This value is 0 if no tests reached 
-% statistical significance).
-%__________________________________________________________________________
 %
-% Variable naming convention: STRUCTURE_NAME.example_variable
+% Copyright (c) 2016 Daniel Feuerriegel and contributors
+% 
+% This file is part of DDTBOX.
+%
+% DDTBOX is free software: you can redistribute it and/or modify
+% it under the terms of the GNU General Public License as published by
+% the Free Software Foundation, either version 3 of the License, or
+% (at your option) any later version.
+% 
+% This program is distributed in the hope that it will be useful,
+% but WITHOUT ANY WARRANTY; without even the implied warranty of
+% MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+% GNU General Public License for more details.
+% 
+% You should have received a copy of the GNU General Public License
+% along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 
 %% Handling variadic inputs
 % Define defaults at the beginning
@@ -74,7 +91,6 @@ alpha_level = options.alpha;
 clear options;
 
 
-
 %% Benjamini-Hochberg False Discovery Rate Correction
 n_total_comparisons = length(p_values); % Get the number of comparisons
 fdr_corrected_h = zeros(1, length(p_values)); % preallocate
@@ -95,3 +111,7 @@ end
 
 % Declare tests significant if they are smaller than or equal to the adjusted critical alpha
 fdr_corrected_h(p_values <= benhoch_critical_alpha) = 1;
+
+%% Copy output into Results structure
+Results.corrected_h = fdr_corrected_h;
+Results.critical_alpha = benhoch_critical_alpha;

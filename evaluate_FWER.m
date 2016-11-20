@@ -5,8 +5,8 @@
 % the expected way.
 %
 % All tests are evaluating paired-samples effects, as implemented in DDTBox.
-% However, several MC correction methods also apply to between-groups
-% comparisons.
+% However, several MC correction methods could also be used for between-groups
+% comparisons, particularly those that only rely on p-values.
 %
 % Note: False Discovery Rate (FDR) corresponds to the expected(average) proportion of all
 % discoveries (rejected null hypotheses) that are false positives. For
@@ -15,7 +15,7 @@
 % Conversely, the False Null Rate (FNR) corresponds to the expeted
 % proportion of all accepted null hypotheses that are false negatives. 
 %
-% Written by DF 10/16
+% Written by Daniel Feuerriegel 10/16
 
 
 % Houskeeping
@@ -34,7 +34,7 @@ Settings.nIterations = 1000; % Number of iterations
 Settings.alphaLevel = 0.05; % Nominal alpha level
 
 % Resampling method settings
-Settings.blaireKarniskiIterations = 1000; % Number of permutation samples to draw for the Blaire-Karniski correction
+Settings.blairKarniskiIterations = 1000; % Number of permutation samples to draw for the blair-Karniski correction
 Settings.clusterIterations = 1000; % Number of permutation samples to draw for the maximum cluster mass null distribution
 Settings.clusteringAlphaLevel = 0.05; % Alpha level for detecting individual tests to include within a cluster
 Settings.ktmsIterations = 1000; % Number of iterations for ktms GFWER control procedure
@@ -47,7 +47,7 @@ FWER.FalsePositives.AllTests.holm = zeros(Settings.nIterations, length(Settings.
 FWER.FalsePositives.AllTests.bh = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
 FWER.FalsePositives.AllTests.bky = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
 FWER.FalsePositives.AllTests.by = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
-FWER.FalsePositives.AllTests.blaireKarniski = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
+FWER.FalsePositives.AllTests.blairKarniski = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
 FWER.FalsePositives.AllTests.cluster = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
 FWER.FalsePositives.AllTests.ktms = zeros(Settings.nIterations, length(Settings.sampleSizesToUse), length(Settings.nTestsToUse));
 
@@ -92,30 +92,45 @@ for nTests = 1:length(Settings.nTestsToUse)
             % Perform paired-samples t test
             [temp_h, temp_p] = ttest(tempSample1, tempSample2, 'Alpha', Settings.alphaLevel); 
             
-            % Blaire-Karniski Maximum Statistic Permutation-Based
+            % Blair-Karniski Maximum Statistic Permutation-Based
             % Correction
-            [blaireKarniski_corrected_h, bkp_corrected_p, Cutoffs.bkp_critical_t(i, sampleSize, nTests)] = multcomp_blaire_karniski_permtest(tempSample1, tempSample2, 'alpha', Settings.alphaLevel, 'iterations', Settings.blaireKarniskiIterations);
+            [Results] = multcomp_blair_karniski_permtest(tempSample1, tempSample2, 'alpha', Settings.alphaLevel, 'iterations', Settings.blairKarniskiIterations);
+            blairKarniski_corrected_h = Results.corrected_h;
+            bkp_corrected_p = Results.corrected_p;
+            Cutoffs.bkp_critical_t(i, sampleSize, nTests) = Results.critical_t;
             
             % Cluster-based correction
-            [cluster_corrected_h] = multcomp_cluster_permtest(tempSample1, tempSample2, 'alpha', Settings.alphaLevel, 'iterations', Settings.clusterIterations, 'clusteringalpha', Settings.clusteringAlphaLevel);
-
+            [Results] = multcomp_cluster_permtest(tempSample1, tempSample2, 'alpha', Settings.alphaLevel, 'iterations', Settings.clusterIterations, 'clusteringalpha', Settings.clusteringAlphaLevel);
+            cluster_corrected_h = Results.corrected_h;
+            
             % Generalised FWER control procedure (KTMS)
-            [ktms_h] = multcomp_ktms(tempSample1, tempSample2, 'alpha', Settings.alphaLevel, 'iterations', Settings.ktmsIterations, 'ktms_u', Settings.ktms_u);
+            [Results] = multcomp_ktms(tempSample1, tempSample2, 'alpha', Settings.alphaLevel, 'iterations', Settings.ktmsIterations, 'ktms_u', Settings.ktms_u);
+            ktms_h = Results.corrected_h;
             
             % Bonferroni correction
-            [bonferroni_corrected_h, Cutoffs.bonferroni_corrected_alpha(i, sampleSize, nTests)] = multcomp_bonferroni(temp_p, 'alpha', Settings.alphaLevel);
-
+            [Results] = multcomp_bonferroni(temp_p, 'alpha', Settings.alphaLevel);
+            bonferroni_corrected_h = Results.corrected_h;
+            Cutoffs.bonferroni_corrected_alpha(i, sampleSize, nTests) = Results.corrected_alpha;
+            
             % Holm-Bonferroni correction
-            [holm_corrected_h, Cutoffs.holm_corrected_alpha(i, sampleSize, nTests)] = multcomp_holm_bonferroni(temp_p, 'alpha', Settings.alphaLevel);
-
+            [Results] = multcomp_holm_bonferroni(temp_p, 'alpha', Settings.alphaLevel);
+            holm_corrected_h = Results.corrected_h;
+            Cutoffs.holm_corrected_alpha(i, sampleSize, nTests) = Results.critical_alpha;
+            
             % Benjamini-Hochberg FDR control procedure
-            [fdr_bh_corrected_h, Cutoffs.benhoch_critical_alpha(i, sampleSize, nTests)] = multcomp_fdr_bh(temp_p, 'alpha', Settings.alphaLevel);
+            [Results] = multcomp_fdr_bh(temp_p, 'alpha', Settings.alphaLevel);
+            fdr_bh_corrected_h = Results.corrected_h;
+            Cutoffs.benhoch_critical_alpha(i, sampleSize, nTests) = Results.critical_alpha;
 
             % Benjamini-Krieger-Yekutieli FDR control procedure
-            [fdr_bky_corrected_h, Cutoffs.bky_stage2_critical_alpha(i, sampleSize, nTests)] = multcomp_fdr_bky(temp_p, 'alpha', Settings.alphaLevel);
+            [Results] = multcomp_fdr_bky(temp_p, 'alpha', Settings.alphaLevel);
+            fdr_bky_corrected_h = Results.corrected_h;
+            Cutoffs.bky_stage2_critical_alpha(i, sampleSize, nTests) = Results.critical_alpha;
 
             % Benjamini-Yekutieli FDR control procedure
-            [fdr_by_corrected_h, Cutoffs.benyek_critical_alpha(i, sampleSize, nTests)] = multcomp_fdr_by(temp_p, 'alpha', Settings.alphaLevel);
+            [Results] = multcomp_fdr_by(temp_p, 'alpha', Settings.alphaLevel);
+            fdr_by_corrected_h = Results.corrected_h;
+            Cutoffs.benyek_critical_alpha(i, sampleSize, nTests) = Results.critical_alpha;
             
             % Calculate the number of "hits" (true positives) using each method
             FWER.TruePositives.uncorrected(i, sampleSize, nTests) = sum(temp_h(trueNullOrAlt == 1));
@@ -124,7 +139,7 @@ for nTests = 1:length(Settings.nTestsToUse)
             FWER.TruePositives.bh(i, sampleSize, nTests) = sum(fdr_bh_corrected_h(trueNullOrAlt == 1));
             FWER.TruePositives.bky(i, sampleSize, nTests) = sum(fdr_bky_corrected_h(trueNullOrAlt == 1));
             FWER.TruePositives.by(i, sampleSize, nTests) = sum(fdr_by_corrected_h(trueNullOrAlt == 0));
-            FWER.TruePositives.blaireKarniski(i, sampleSize, nTests) = sum(blaireKarniski_corrected_h(trueNullOrAlt == 1));
+            FWER.TruePositives.blairKarniski(i, sampleSize, nTests) = sum(blairKarniski_corrected_h(trueNullOrAlt == 1));
             FWER.TruePositives.cluster(i, sampleSize, nTests) = sum(cluster_corrected_h(trueNullOrAlt == 1));
             FWER.TruePositives.ktms(i, sampleSize, nTests) = sum(ktms_h(trueNullOrAlt == 1));
             
@@ -135,7 +150,7 @@ for nTests = 1:length(Settings.nTestsToUse)
             FWER.TrueNegatives.bh(i, sampleSize, nTests) = Settings.nTrueNegatives(nTests) - sum(fdr_bh_corrected_h(trueNullOrAlt == 0));
             FWER.TrueNegatives.bky(i, sampleSize, nTests) = Settings.nTrueNegatives(nTests) - sum(fdr_bky_corrected_h(trueNullOrAlt == 0));
             FWER.TrueNegatives.by(i, sampleSize, nTests) = Settings.nTrueNegatives(nTests) - sum(fdr_by_corrected_h(trueNullOrAlt == 0));
-            FWER.TrueNegatives.blaireKarniski(i, sampleSize, nTests) = Settings.nTrueNegatives(nTests) - sum(blaireKarniski_corrected_h(trueNullOrAlt == 0));
+            FWER.TrueNegatives.blairKarniski(i, sampleSize, nTests) = Settings.nTrueNegatives(nTests) - sum(blairKarniski_corrected_h(trueNullOrAlt == 0));
             FWER.TrueNegatives.cluster(i, sampleSize, nTests) = Settings.nTrueNegatives(nTests) - sum(cluster_corrected_h(trueNullOrAlt == 0));
             FWER.TrueNegatives.ktms(i, sampleSize, nTests) = Settings.nTrueNegatives(nTests) - sum(ktms_h(trueNullOrAlt == 0));
             
@@ -146,7 +161,7 @@ for nTests = 1:length(Settings.nTestsToUse)
             FWER.FalsePositives.bh(i, sampleSize, nTests) = sum(fdr_bh_corrected_h(trueNullOrAlt == 0));
             FWER.FalsePositives.bky(i, sampleSize, nTests) = sum(fdr_bky_corrected_h(trueNullOrAlt == 0));
             FWER.FalsePositives.by(i, sampleSize, nTests) = sum(fdr_by_corrected_h(trueNullOrAlt == 0));
-            FWER.FalsePositives.blaireKarniski(i, sampleSize, nTests) = sum(blaireKarniski_corrected_h(trueNullOrAlt == 0));
+            FWER.FalsePositives.blairKarniski(i, sampleSize, nTests) = sum(blairKarniski_corrected_h(trueNullOrAlt == 0));
             FWER.FalsePositives.cluster(i, sampleSize, nTests) = sum(cluster_corrected_h(trueNullOrAlt == 0));
             FWER.FalsePositives.ktms(i, sampleSize, nTests) = sum(ktms_h(trueNullOrAlt == 0));
 
@@ -157,7 +172,7 @@ for nTests = 1:length(Settings.nTestsToUse)
             FWER.FalseNegatives.bh(i, sampleSize, nTests) = Settings.nTrueEffects(nTests) - sum(fdr_bh_corrected_h(trueNullOrAlt == 1));
             FWER.FalseNegatives.bky(i, sampleSize, nTests) = Settings.nTrueEffects(nTests) - sum(fdr_bky_corrected_h(trueNullOrAlt == 1));
             FWER.FalseNegatives.by(i, sampleSize, nTests) = Settings.nTrueEffects(nTests) - sum(fdr_by_corrected_h(trueNullOrAlt == 1));
-            FWER.FalseNegatives.blaireKarniski(i, sampleSize, nTests) = Settings.nTrueEffects(nTests) - sum(blaireKarniski_corrected_h(trueNullOrAlt == 1));
+            FWER.FalseNegatives.blairKarniski(i, sampleSize, nTests) = Settings.nTrueEffects(nTests) - sum(blairKarniski_corrected_h(trueNullOrAlt == 1));
             FWER.FalseNegatives.cluster(i, sampleSize, nTests) = Settings.nTrueEffects(nTests) - sum(cluster_corrected_h(trueNullOrAlt == 1));
             FWER.FalseNegatives.ktms(i, sampleSize, nTests) = Settings.nTrueEffects(nTests) - sum(ktms_h(trueNullOrAlt == 1));
             
@@ -171,7 +186,7 @@ for nTests = 1:length(Settings.nTestsToUse)
             FDP.bh(i, sampleSize, nTests) = FWER.FalsePositives.bh(i, sampleSize, nTests) / (FWER.FalsePositives.bh(i, sampleSize, nTests) + FWER.TruePositives.bh(i, sampleSize, nTests));
             FDP.bky(i, sampleSize, nTests) = FWER.FalsePositives.bky(i, sampleSize, nTests) / (FWER.FalsePositives.bky(i, sampleSize, nTests) + FWER.TruePositives.bky(i, sampleSize, nTests));
             FDP.by(i, sampleSize, nTests) = FWER.FalsePositives.by(i, sampleSize, nTests) / (FWER.FalsePositives.by(i, sampleSize, nTests) + FWER.TruePositives.by(i, sampleSize, nTests));
-            FDP.blaireKarniski(i, sampleSize, nTests) = FWER.FalsePositives.blaireKarniski(i, sampleSize, nTests) / (FWER.FalsePositives.blaireKarniski(i, sampleSize, nTests) + FWER.TruePositives.blaireKarniski(i, sampleSize, nTests));
+            FDP.blairKarniski(i, sampleSize, nTests) = FWER.FalsePositives.blairKarniski(i, sampleSize, nTests) / (FWER.FalsePositives.blairKarniski(i, sampleSize, nTests) + FWER.TruePositives.blairKarniski(i, sampleSize, nTests));
             FDP.cluster(i, sampleSize, nTests) = FWER.FalsePositives.cluster(i, sampleSize, nTests) / (FWER.FalsePositives.cluster(i, sampleSize, nTests) + FWER.TruePositives.cluster(i, sampleSize, nTests));
             FDP.ktms(i, sampleSize, nTests) = FWER.FalsePositives.ktms(i, sampleSize, nTests) / (FWER.FalsePositives.ktms(i, sampleSize, nTests) + FWER.TruePositives.ktms(i, sampleSize, nTests));
 
@@ -184,7 +199,7 @@ for nTests = 1:length(Settings.nTestsToUse)
             FNP.bh(i, sampleSize, nTests) = FWER.FalseNegatives.bh(i, sampleSize, nTests) / (FWER.FalseNegatives.bh(i, sampleSize, nTests) + FWER.TrueNegatives.bh(i, sampleSize, nTests));
             FNP.bky(i, sampleSize, nTests) = FWER.FalseNegatives.bky(i, sampleSize, nTests) / (FWER.FalseNegatives.bky(i, sampleSize, nTests) + FWER.TrueNegatives.bky(i, sampleSize, nTests));
             FNP.by(i, sampleSize, nTests) = FWER.FalseNegatives.by(i, sampleSize, nTests) / (FWER.FalseNegatives.by(i, sampleSize, nTests) + FWER.TrueNegatives.by(i, sampleSize, nTests));
-            FNP.blaireKarniski(i, sampleSize, nTests) = FWER.FalseNegatives.blaireKarniski(i, sampleSize, nTests) / (FWER.FalseNegatives.blaireKarniski(i, sampleSize, nTests) + FWER.TrueNegatives.blaireKarniski(i, sampleSize, nTests));
+            FNP.blairKarniski(i, sampleSize, nTests) = FWER.FalseNegatives.blairKarniski(i, sampleSize, nTests) / (FWER.FalseNegatives.blairKarniski(i, sampleSize, nTests) + FWER.TrueNegatives.blairKarniski(i, sampleSize, nTests));
             FNP.cluster(i, sampleSize, nTests) = FWER.FalseNegatives.cluster(i, sampleSize, nTests) / (FWER.FalseNegatives.cluster(i, sampleSize, nTests) + FWER.TrueNegatives.cluster(i, sampleSize, nTests));
             FNP.ktms(i, sampleSize, nTests) = FWER.FalseNegatives.ktms(i, sampleSize, nTests) / (FWER.FalseNegatives.ktms(i, sampleSize, nTests) + FWER.TrueNegatives.ktms(i, sampleSize, nTests));
 
@@ -199,7 +214,7 @@ for nTests = 1:length(Settings.nTestsToUse)
         FWER.FalsePositives.AllTests.bh(FWER.FalsePositives.bh > 0) = 1;
         FWER.FalsePositives.AllTests.bky(FWER.FalsePositives.bky > 0) = 1;
         FWER.FalsePositives.AllTests.by(FWER.FalsePositives.by > 0) = 1;
-        FWER.FalsePositives.AllTests.blaireKarniski(FWER.FalsePositives.blaireKarniski > 0) = 1;
+        FWER.FalsePositives.AllTests.blairKarniski(FWER.FalsePositives.blairKarniski > 0) = 1;
         FWER.FalsePositives.AllTests.cluster(FWER.FalsePositives.cluster > 0) = 1;
         FWER.FalsePositives.AllTests.ktms(FWER.FalsePositives.ktms > 0) = 1; % No. of false positives needs to be above ktms_u parameter for GFWER
 
@@ -210,7 +225,7 @@ for nTests = 1:length(Settings.nTestsToUse)
         FWER.bh(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.bh(:, sampleSize, nTests)) / Settings.nIterations;
         FWER.bky(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.bky(:, sampleSize, nTests)) / Settings.nIterations;
         FWER.by(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.by(:, sampleSize, nTests)) / Settings.nIterations;
-        FWER.blaireKarniski(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.blaireKarniski(:, sampleSize, nTests)) / Settings.nIterations;
+        FWER.blairKarniski(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.blairKarniski(:, sampleSize, nTests)) / Settings.nIterations;
         FWER.cluster(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.cluster(:, sampleSize, nTests)) / Settings.nIterations;
         FWER.GFWER_ktms(sampleSize, nTests) = sum(FWER.FalsePositives.AllTests.ktms(:, sampleSize, nTests)) / Settings.nIterations;
 
@@ -222,7 +237,7 @@ for nTests = 1:length(Settings.nTestsToUse)
         FalsePosRate.bh(sampleSize, nTests) = nanmean(FWER.FalsePositives.bh(:, sampleSize, nTests));
         FalsePosRate.bky(sampleSize, nTests) = nanmean(FWER.FalsePositives.bky(:, sampleSize, nTests));
         FalsePosRate.by(sampleSize, nTests) = nanmean(FWER.FalsePositives.by(:, sampleSize, nTests));
-        FalsePosRate.blaireKarniski(sampleSize, nTests) = nanmean(FWER.FalsePositives.blaireKarniski(:, sampleSize, nTests));
+        FalsePosRate.blairKarniski(sampleSize, nTests) = nanmean(FWER.FalsePositives.blairKarniski(:, sampleSize, nTests));
         FalsePosRate.cluster(sampleSize, nTests) = nanmean(FWER.FalsePositives.cluster(:, sampleSize, nTests));
         FalsePosRate.ktms(sampleSize, nTests) = nanmean(FWER.FalsePositives.ktms(:, sampleSize, nTests));
 
@@ -234,7 +249,7 @@ for nTests = 1:length(Settings.nTestsToUse)
         FalseNegRate.bh(sampleSize, nTests) = nanmean(FWER.FalseNegatives.bh(:, sampleSize, nTests));
         FalseNegRate.bky(sampleSize, nTests) = nanmean(FWER.FalseNegatives.bky(:, sampleSize, nTests));
         FalseNegRate.by(sampleSize, nTests) = nanmean(FWER.FalseNegatives.by(:, sampleSize, nTests));
-        FalseNegRate.blaireKarniski(sampleSize, nTests) = nanmean(FWER.FalseNegatives.blaireKarniski(:, sampleSize, nTests));
+        FalseNegRate.blairKarniski(sampleSize, nTests) = nanmean(FWER.FalseNegatives.blairKarniski(:, sampleSize, nTests));
         FalseNegRate.cluster(sampleSize, nTests) = nanmean(FWER.FalseNegatives.cluster(:, sampleSize, nTests));
         FalseNegRate.ktms(sampleSize, nTests) = nanmean(FWER.FalseNegatives.ktms(:, sampleSize, nTests));
         
@@ -246,7 +261,7 @@ for nTests = 1:length(Settings.nTestsToUse)
         TruePosRate.bh(sampleSize, nTests) = nanmean(FWER.TruePositives.bh(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
         TruePosRate.bky(sampleSize, nTests) = nanmean(FWER.TruePositives.bky(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
         TruePosRate.by(sampleSize, nTests) = nanmean(FWER.TruePositives.by(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
-        TruePosRate.blaireKarniski(sampleSize, nTests) = nanmean(FWER.TruePositives.blaireKarniski(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
+        TruePosRate.blairKarniski(sampleSize, nTests) = nanmean(FWER.TruePositives.blairKarniski(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
         TruePosRate.cluster(sampleSize, nTests) = nanmean(FWER.TruePositives.cluster(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
         TruePosRate.ktms(sampleSize, nTests) = nanmean(FWER.TruePositives.ktms(:, sampleSize, nTests)) / Settings.nTrueEffects(nTests);
 
@@ -258,7 +273,7 @@ for nTests = 1:length(Settings.nTestsToUse)
         TrueNegRate.bh(sampleSize, nTests) = nanmean(FWER.TrueNegatives.bh(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
         TrueNegRate.bky(sampleSize, nTests) = nanmean(FWER.TrueNegatives.bky(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
         TrueNegRate.by(sampleSize, nTests) = nanmean(FWER.TrueNegatives.by(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
-        TrueNegRate.blaireKarniski(sampleSize, nTests) = nanmean(FWER.TrueNegatives.blaireKarniski(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
+        TrueNegRate.blairKarniski(sampleSize, nTests) = nanmean(FWER.TrueNegatives.blairKarniski(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
         TrueNegRate.cluster(sampleSize, nTests) = nanmean(FWER.TrueNegatives.cluster(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
         TrueNegRate.ktms(sampleSize, nTests) = nanmean(FWER.TrueNegatives.ktms(:, sampleSize, nTests)) / Settings.nTrueNegatives(nTests);
         
@@ -271,7 +286,7 @@ for nTests = 1:length(Settings.nTestsToUse)
         FDR.bh(sampleSize, nTests) = nanmean(FDP.bh(:, sampleSize, nTests));
         FDR.bky(sampleSize, nTests) = nanmean(FDP.bky(:, sampleSize, nTests));
         FDR.by(sampleSize, nTests) = nanmean(FDP.by(:, sampleSize, nTests));
-        FDR.blaireKarniski(sampleSize, nTests) = nanmean(FDP.blaireKarniski(:, sampleSize, nTests));
+        FDR.blairKarniski(sampleSize, nTests) = nanmean(FDP.blairKarniski(:, sampleSize, nTests));
         FDR.cluster(sampleSize, nTests) = nanmean(FDP.cluster(:, sampleSize, nTests));
         FDR.ktms(sampleSize, nTests) = nanmean(FDP.ktms(:, sampleSize, nTests));
 
@@ -283,7 +298,7 @@ for nTests = 1:length(Settings.nTestsToUse)
         FNR.bh(sampleSize, nTests) = nanmean(FNP.bh(:, sampleSize, nTests));
         FNR.bky(sampleSize, nTests) = nanmean(FNP.bky(:, sampleSize, nTests));
         FNR.by(sampleSize, nTests) = nanmean(FNP.by(:, sampleSize, nTests));
-        FNR.blaireKarniski(sampleSize, nTests) = nanmean(FNP.blaireKarniski(:, sampleSize, nTests));
+        FNR.blairKarniski(sampleSize, nTests) = nanmean(FNP.blairKarniski(:, sampleSize, nTests));
         FNR.cluster(sampleSize, nTests) = nanmean(FNP.cluster(:, sampleSize, nTests));
         FNR.ktms(sampleSize, nTests) = nanmean(FNP.ktms(:, sampleSize, nTests));
         
@@ -304,7 +319,7 @@ plot(FWER.holm);
 plot(FWER.bh);
 plot(FWER.bky);
 plot(FWER.by);
-plot(FWER.blaireKarniski);
+plot(FWER.blairKarniski);
 plot(FWER.cluster);
 plot(FWER.GFWER_ktms);
 
@@ -317,7 +332,7 @@ plot(FDR.holm);
 plot(FDR.bh);
 plot(FDR.bky);
 plot(FDR.by);
-plot(FDR.blaireKarniski);
+plot(FDR.blairKarniski);
 plot(FDR.cluster);
 plot(FDR.ktms);
 
@@ -330,7 +345,7 @@ plot(FalsePosRate.holm);
 plot(FalsePosRate.bh);
 plot(FalsePosRate.bky);
 plot(FalsePosRate.by);
-plot(FalsePosRate.blaireKarniski);
+plot(FalsePosRate.blairKarniski);
 plot(FalsePosRate.cluster);
 
 % Plot average number of false negatives for each method
@@ -342,7 +357,7 @@ plot(FalseNegRate.holm);
 plot(FalseNegRate.bh);
 plot(FalseNegRate.bky);
 plot(FalseNegRate.by);
-plot(FalseNegRate.blaireKarniski);
+plot(FalseNegRate.blairKarniski);
 plot(FalseNegRate.cluster);
 
 % Plot average percentage of true positives for each method
@@ -354,7 +369,7 @@ plot(TruePosRate.holm);
 plot(TruePosRate.bh);
 plot(TruePosRate.bky);
 plot(TruePosRate.by);
-plot(TruePosRate.blaireKarniski);
+plot(TruePosRate.blairKarniski);
 plot(TruePosRate.cluster);
 
 % Plot average percentage of true negatives for each method
@@ -366,5 +381,5 @@ plot(TrueNegRate.holm);
 plot(TrueNegRate.bh);
 plot(TrueNegRate.bky);
 plot(TrueNegRate.by);
-plot(TrueNegRate.blaireKarniski);
+plot(TrueNegRate.blairKarniski);
 plot(TrueNegRate.cluster);

@@ -1,40 +1,57 @@
-function [holm_corrected_h, holm_corrected_alpha] = multcomp_holm_bonferroni(p_values, varargin)
-
-%__________________________________________________________________________
-% Multiple comparisons correction function written by Daniel Feuerriegel 21/04/2016 
-% to complement DDTBOX scripts written by Stefan Bode 01/03/2013.
+function [Results] = multcomp_holm_bonferroni(p_values, varargin)
 %
-% The toolbox was written with contributions from:
-% Daniel Bennett, Daniel Feuerriegel, Phillip Alday
-%
-% The author (Stefan Bode) further acknowledges helpful conceptual input/work from: 
-% Jutta Stahl, Simon Lilburn, Philip L. Smith, Elaine Corbett, Carsten Murawski, 
-% Carsten Bogler, John-Dylan Haynes
-%__________________________________________________________________________
-%
-% This script receives a vector of p-values and outputs
-% Holm-Bonferroni corrected null hypothesis test results. The number of tests is
+% This function receives a vector of p-values and outputs
+% Holm-Bonferroni corrected results. The number of tests is
 % determined by the length of the vector of p-values.
 %
 % Holm, S. (1979). A simple sequentially rejective multiple test procedure. 
-% Scandinavian Journal of Statistics 6 (2): 65?70.
+% Scandinavian Journal of Statistics 6 (2): 65-70.
 %
-% requires:
-% - p_values (vector of p-values from the hypothesis tests of interest)
+% Inputs:
 %
-% optional:
-% - alpha (uncorrected alpha level for statistical significance, default 0.05)
+%   p_values        vector of p-values from the hypothesis tests of interest
+%
+%  'Key1'          Keyword string for argument 1
+%
+%   Value1         Value of argument 1
+%
+% Optional Keyword Inputs:
+%
+%   alpha           uncorrected alpha level for statistical significance, 
+%                   default 0.05
+%
+% Outputs:
+%
+%   Results structure containing:
+%
+%   corrected_h    vector of Holm-Bonferroni corrected hypothesis tests 
+%                  derived from comparing p-values to Holm-Bonferroni 
+%                  adjusted critical alpha level. 
+%                  1 = statistically significant, 0 = not statistically significant
+%
+%   critical_alpha      the Holm-Bonferroni adjusted alpha level. 
+%                       p-values smaller than this are declared as
+%                       statistically significant.
+%
+% Example:  [Results] = multcomp_holm_bonferroni(p_values, 'alpha', 0.05)  
 %
 %
-% outputs:
-% - holm_corrected_h (vector of Holm-Bonferroni corrected hypothesis tests 
-% derived from comparing p-values to Holm-Bonferroni adjusted critical alpha level. 
-% 1 = statistically significant, 0 = not statistically significant)
+% Copyright (c) 2016 Daniel Feuerriegel and contributors
+% 
+% This file is part of DDTBOX.
 %
-% - holm_corrected_alpha (the adjusted alpha threshold)
-%__________________________________________________________________________
-%
-% Variable naming convention: STRUCTURE_NAME.example_variable
+% DDTBOX is free software: you can redistribute it and/or modify
+% it under the terms of the GNU General Public License as published by
+% the Free Software Foundation, either version 3 of the License, or
+% (at your option) any later version.
+% 
+% This program is distributed in the hope that it will be useful,
+% but WITHOUT ANY WARRANTY; without even the implied warranty of
+% MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+% GNU General Public License for more details.
+% 
+% You should have received a copy of the GNU General Public License
+% along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 %% Handling variadic inputs
 % Define defaults at the beginning
@@ -88,3 +105,7 @@ if ~exist('holm_corrected_alpha', 'var') % If all null hypotheses are rejected
 end
 
 holm_corrected_h(p_values < holm_corrected_alpha) = 1; % Compare each p-value to the corrected threshold.
+
+%% Copy output to Results structure
+Results.corrected_h = holm_corrected_h;
+Results.critical_alpha = holm_corrected_alpha;
