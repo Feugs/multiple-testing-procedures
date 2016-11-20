@@ -160,7 +160,7 @@ for iteration = 1:n_iterations
         % switching labels of conditions). The assignment of labels across
         % tests are consistent within each participant.
         temp = zeros(n_subjects, n_total_comparisons); % Preallocate
-        temp_signs(1:n_subjects, step) = (rand(n_subjects, 1) > .5) * 2 - 1; % Switches signs of labels
+        temp_signs(1:n_subjects) = (rand(n_subjects, 1) > .5) * 2 - 1; % Switches signs of labels
 
     for step = 1:n_total_comparisons
         temp(:, step) = temp_signs(1:n_subjects, step) .* diff_scores(1:n_subjects, step);
@@ -191,5 +191,5 @@ corrected_h = ktms_sig_effect_locations;
 %% Copy output into Results structure
 Results.corrected_h = corrected_h;
 Results.t_values = uncorrected_t;
-Results.critical_t = ktms_null_nutoff;
+Results.critical_t = ktms_null_cutoff;
 Results.ktms_u = ktms_u;

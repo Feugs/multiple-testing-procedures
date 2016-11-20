@@ -142,7 +142,7 @@ t_stat = zeros(n_total_comparisons, n_iterations); % Preallocate
 % Generate the null hypothesis permutation distribution of maximum statistics    
 for iteration = 1:n_iterations
     clear temp; % Clearing out temp variable
-    temp_signs = zeros(n_subjects, n_total_comparisons); % Preallocate
+    temp_signs = zeros(n_subjects, 1); % Preallocate
     temp = zeros(n_subjects, n_total_comparisons); % Preallocate
 
     % Draw a permutation sample for each test    

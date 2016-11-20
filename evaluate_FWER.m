@@ -19,7 +19,7 @@
 
 
 % Houskeeping
-clear all;
+% clear all;
 close all;
 
 % Seed random number generator based on computer clock
@@ -27,8 +27,8 @@ rng('shuffle');
 
 % Simulation Settings
 Settings.sampleSizesToUse = [30]; % Sample size per test
-Settings.nTestsToUse = [10 50 100 1000 10000]; % Number of tests
-Settings.trueEffectProportion = 0.1; % Proportion of hypotheses that are real effects (between 0 and 1)
+Settings.nTestsToUse = [10]; % Number of tests
+Settings.trueEffectProportion = 0; % Proportion of hypotheses that are real effects (between 0 and 1)
 Settings.meanEffect = 1; % Mean magnitude of the effect (note: SD is on average 1)
 Settings.nIterations = 1000; % Number of iterations
 Settings.alphaLevel = 0.05; % Nominal alpha level
