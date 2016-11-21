@@ -1,9 +1,10 @@
 function [Results] = multcomp_cluster_permtest(cond1_data, cond2_data, varargin)
 %
 % This function receives the original data and outputs corrected p-values and
-% hypothesis test results based on a maximum cluster mass statistic permutation test,
-% as described in Bullmore et al. (1999). The permutation test in this function
-% is based on the t-statistic but could be adapted to use with other 
+% hypothesis test results based on a maximum cluster mass statistic  two-tailed 
+% permutation test, as described in Bullmore et al. (1999). 
+% The permutation test in this function is based on the t-statistic but 
+% could be adapted to use with other 
 % statistics such as the trimmed mean or Yuen's t.
 %
 % Bullmore, E. T., Suckling, J., Overmeyer, S., Rabe-Hesketh, S., 
@@ -203,28 +204,29 @@ for iteration = 1:n_iterations
         if cluster_perm_test_h(step, iteration) == 1
             if step == 1 % If the first test in the set
                 cluster_counter = cluster_counter + 1;
-                cluster_mass_vector(cluster_counter) = abs(t_stat(step, iteration));
+                cluster_mass_vector(cluster_counter) = t_stat(step, iteration);
             else
                 % Add to the cluster if there are consecutive
                 % statistically significant tests with the same sign.
                 % Otherwise, make a new cluster.
                 if cluster_perm_test_h(step - 1, iteration) == 1 && t_sign(step - 1, iteration) == t_sign(step, iteration)
-                    cluster_mass_vector(cluster_counter) = cluster_mass_vector(cluster_counter) + abs(t_stat(step, iteration));
+                    cluster_mass_vector(cluster_counter) = cluster_mass_vector(cluster_counter) + t_stat(step, iteration);
                 else
                     cluster_counter = cluster_counter + 1;
-                    cluster_mass_vector(cluster_counter) = abs(t_stat(step, iteration));
+                    cluster_mass_vector(cluster_counter) = t_stat(step, iteration);
                 end 
             end % of if test == 1
         end % of if clusterPermTest
     end % of for steps = 1:n_total_steps
 
-    % Find the maximum cluster mass
+    % Find the maximum cluster mass (positive mass, but sign could be
+    % negative as assumed symmetric null distribution)
     max_cluster_mass(iteration) = max(cluster_mass_vector);
 end % of iterations loop
 
 % Calculating the 95th percentile of maximum cluster mass values (used as decision
 % critieria for statistical significance)
-cluster_mass_null_cutoff = prctile(max_cluster_mass, ((1 - alpha_level) * 100));
+cluster_mass_null_cutoff = prctile(max_cluster_mass, ((1 - alpha_level / 2) * 100));
 
 % Calculate cluster masses in the actual (non-permutation) tests
 cluster_mass_vector = [0]; % Resets vector of cluster masses
@@ -276,12 +278,15 @@ for cluster_no = 1:length(cluster_mass_vector)
     
     % Calculate the number of permutation samples with cluster masses
     % larger than the observed cluster mass for a given cluster
-    b = sum(abs(max_cluster_mass) >= abs(cluster_mass_vector(cluster_no)));
+    b = sum(abs(max_cluster_mass) >= abs(cluster_mass_vector(cluster_no))) * 2; % Multiply by 2 for two-tailed
     p_t = (b + 1) / (n_iterations + 1); % Calculate conservative version of p-value as in Phipson & Smyth, 2010
-    
     cluster_p(cluster_no) = p_t; % P-value for each cluster
     
 end % of for cluster_no
+
+% Adjust p-values larger than 1 (can arise from doubling p-values based on
+% two-tailed testing procedure with permutation distribution).
+cluster_p(cluster_p > 1) = 1;
 
 % Check whether the p-value of each cluster is smaller than the critical
 % alpha level

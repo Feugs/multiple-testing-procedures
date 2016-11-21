@@ -1,7 +1,7 @@
 function [Results] = multcomp_blair_karniski_permtest(cond1_data, cond2_data, varargin)
 %
 % This script receives paired-samples data and outputs corrected p-values and
-% hypothesis test results based on a maximum statistic permutation test
+% hypothesis test results based on a maximum statistic two-tailed permutation test
 % (Blair & Karniski, 1993). The permutation test in this script is based
 % on the t-statistic from a paired-samples t-test, but could be adapted 
 % to use with other statistics such as the trimmed mean or yuen's t. 
@@ -43,13 +43,13 @@ function [Results] = multcomp_blair_karniski_permtest(cond1_data, cond2_data, va
 %
 %   corrected_h     vector of hypothesis tests in which statistical significance
 %                   is defined by values above a threshold of the 
-%                   (alpha_level * 100)th percentile of the maximum statistic distribution.
+%                   ((1 - alpha / 2) * 100)th percentile of the maximum statistic distribution.
 %                   1 = statistically significant, 0 = not statistically significant
 %
 %   corrected_p     vector of p-values derived from assessing the t-value of
 %                   each test relative to the distribution of maximum t-values across
-%                   iterations in the permutation test. For example, if above the 99th
-%                   percentile then p < .01.
+%                   iterations in the permutation test. For example, if above the 97.5th
+%                   percentile then p < .05 (due to two-tailed testing).
 %
 %   critical_t      absolute critical t-value. t-values larger than this are
 %                   counted as statistically significant.
@@ -185,11 +185,15 @@ for step = 1:n_total_comparisons
     % Smyth (2010)
     % Calculate the number of permutation samples with maximum statistics
     % larger than the observed test statistic for a given cluster
-    b = sum(t_max(:) >= abs(uncorrected_t(step)));
+    b = sum(t_max(:) >= abs(uncorrected_t(step))) * 2; % Multiply by 2 for two-tailed
     p_t = (b + 1) / (n_iterations + 1); % Calculate conservative version of p-value as in Phipson & Smyth, 2010
     corrected_p(step) = p_t;
     
 end % of for step loop
+
+% Adjusting p-values that are larger than 1 (can occur due to doubling of
+% p-values with two-tailed testing)
+corrected_p(corrected_p > 1) = 1;
 
 % Copy output into a results structure
 Results.corrected_h = corrected_h;

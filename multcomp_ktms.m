@@ -174,9 +174,9 @@ for iteration = 1:n_iterations
     ktms_t_max(iteration) = t_sorted(ktms_u + 1); % Get the u + 1th largest t-value in ktms procedure
 end % of for iteration
 
-% Calculating the 95th percentile of t_max values (used as decision
-% critieria for statistical significance)
-ktms_null_cutoff = prctile(ktms_t_max, ((1 - alpha_level) * 100));
+% Calculating the 97.5th percentile of t_max values (used as decision
+% critieria for two-tailed statistical significance)
+ktms_null_cutoff = prctile(ktms_t_max, ((1 - alpha_level / 2) * 100));
 
 % Checking whether each test statistic is above the specified threshold:
 for step = 1:n_total_comparisons
