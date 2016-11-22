@@ -278,8 +278,9 @@ for cluster_no = 1:length(cluster_mass_vector)
     
     % Calculate the number of permutation samples with cluster masses
     % larger than the observed cluster mass for a given cluster
-    b = sum(abs(max_cluster_mass) >= abs(cluster_mass_vector(cluster_no))) * 2; % Multiply by 2 for two-tailed
+    b = sum(max_cluster_mass >= abs(cluster_mass_vector(cluster_no)));
     p_t = (b + 1) / (n_iterations + 1); % Calculate conservative version of p-value as in Phipson & Smyth, 2010
+    p_t = p_t * 2; % Doubling p-value for two-tailed (essentially a Bonferroni correction for two tests)
     cluster_p(cluster_no) = p_t; % P-value for each cluster
     
 end % of for cluster_no

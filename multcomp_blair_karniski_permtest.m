@@ -167,7 +167,8 @@ end % of for iteration loop
 
 % Calculating the 95th percentile of t_max values. This is the significance
 % threshold for the test statistic (e.g. the t statistic)
-critical_t = prctile(t_max(1:n_iterations), ((1 - alpha_level) * 100));
+% Calculates as 97.5th percentile for two-tailed testing
+critical_t = prctile(t_max(1:n_iterations), ((1 - alpha_level / 2) * 100));
 
 % Compare observed t statistics against critical_t and calculate resulting
 % p-values corrected for multiple comparisons.
@@ -185,8 +186,9 @@ for step = 1:n_total_comparisons
     % Smyth (2010)
     % Calculate the number of permutation samples with maximum statistics
     % larger than the observed test statistic for a given cluster
-    b = sum(t_max(:) >= abs(uncorrected_t(step))) * 2; % Multiply by 2 for two-tailed
+    b = sum(t_max(:) >= abs(uncorrected_t(step)));
     p_t = (b + 1) / (n_iterations + 1); % Calculate conservative version of p-value as in Phipson & Smyth, 2010
+    p_t = p_t * 2; % Doubling p-value for two-tailed (essentially a Bonferroni correction for two tests)
     corrected_p(step) = p_t;
     
 end % of for step loop
